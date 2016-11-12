@@ -1,0 +1,9 @@
+_complete_awsssh () {
+        COMPREPLY=()
+        cur="${COMP_WORDS[COMP_CWORD]}"
+	   	comp_aws=`awsssh --list| sort |uniq`
+        COMPREPLY=( $(compgen -W "${comp_aws}" -- $cur))
+        return 0
+
+}
+complete -F _complete_awsssh awsssh

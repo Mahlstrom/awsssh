@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+DEBUGGING=0
+sshuser="ec2-user"
+
+# Check for arguments. Arguments is needed
+if [ $# == 0 ];then
+	echo "need argument"
+	exit
+fi
+arg1=$1
+
+function makeCache {
+	aws ec2 describe-instances --query 'Reservations[*].Instances[*].[InstanceId,PrivateIpAddress,PublicIpAddress,VpcId,Tags[?Key==`Name`].Value,ImageId,KeyName]' --output text | sed '$!N;s/\n/	/' > /tmp/awsinst.txt
+}
+function makeImgCache {
+	aws ec2 describe-images --image-ids $(aws ec2 describe-instances | grep '"ImageId":' | sort | uniq | sed 's/.*\(ami-.*\)\",/\1/' | xargs echo) --query 'Images[*].[ImageId,Name]' --output text >/tmp/awsimgs.txt
+}
+
+if [ ! -f /tmp/awsinst.txt ];then
+	makeCache
+elif test `find "/tmp/awsinst.txt" -mtime +0h5m`; then
+	makeCache
+fi
+
+if [ ${arg1} == "--list" ];then
+	cat /tmp/awsinst.txt | awk '{print $7}'
+	exit
+fi
+
+BA=$(grep $arg1 /tmp/awsinst.txt)
+IFS=$'\2' read -ra ITEMS <<<"${BA//$'\t'/$'\2'}"
+
+AWS_INSTANCE=${ITEMS[0]}
+AWS_IP_PRIV=${ITEMS[1]}
+AWS_IP_PUB=${ITEMS[2]}
+AWS_VPN=${ITEMS[3]}
+AWS_IMG=${ITEMS[4]}
+AWS_PEM=${ITEMS[5]}
+
+if [ ! -f /tmp/awsimgs.txt ]; then
+	makeImgCache
+elif [$(grep $AWS_IMG /tmp/awsimgs.txt | wc -l) == 0 ]; then
+	makeImgCache
+fi
+
+is_ubuntu=$(grep $AWS_IMG /tmp/awsimgs.txt | sed 's/.*\(ubuntu\).*/\1/')
+
+if [ "${is_ubuntu}" == "ubuntu" ] ;then
+	sshuser="ubuntu"
+fi
+
+if [ ! $AWS_IP_PUB == "None" ];then
+	echo $AWS_VPN
+	ssh $sshuser@$AWS_IP_PUB -i ~/.ssh/$AWS_PEM.pem -o StrictHostKeyChecking=no
+else
+	bastion=$(egrep "${AWS_VPN}.*bastion" /tmp/awsinst.txt | awk '{print $3}')
+	ssh -i ~/.ssh/$AWS_PEM.pem -o ProxyCommand="ssh ec2-user@$bastion nc %h %p" -o StrictHostKeyChecking=no ec2-user@${AWS_IP_PRIV}
+fi
