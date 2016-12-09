@@ -8,10 +8,6 @@ key_pem=5
 key_name=6
 arg1=$1
 
-#arg1="misc-prod-priv"
-#arg1=Knut
-#arg1="--list"
-
 # We need some kind of argument
 
 # Check if we have a list of all instances
@@ -40,7 +36,7 @@ function getUsername {
     if [ "${is_ubuntu}" == "ubuntu" ] ;then
         usrname="ubuntu"
     fi
-    echo "ec2-user"
+    echo "${usrname}"
 }
 function getBastion {
     A=$1
