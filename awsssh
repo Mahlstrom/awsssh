@@ -1,94 +1,16 @@
-#!/usr/bin/env bash
-# Key placement in /tmp/awsinst.txt
-key_instance=0
-key_ippriv=1
-key_ippub=2
-key_vpc=3
-key_img=4
-key_pem=5
-key_name=6
+#!/Users/mahlstrom/workspace/awsssh/venv/bin/python
+import sys
+from src.awsssh import awsssh
 
-arg1=$1
 
-# We need some kind of argument
-if [ -z "${arg1}" ]
-  then
-    echo "Awsssh needs an argument, --list or <ec2 server name>"
-    exit 1
-fi
+def print_help():
+    print "Here is some help"
 
-# Check if we have an up to date list of all instances
-if [ ! -f /tmp/awsinst.txt ] || test `find "/tmp/awsinst.txt" -mtime +0h1m`;then
-	aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" --query 'Reservations[*].Instances[*].[InstanceId,PrivateIpAddress,PublicIpAddress,VpcId,Tags[?Key==`Name`].Value,ImageId,KeyName]' --output text | sed '$!N;s/\n/	/' > /tmp/awsinst.txt
-fi
 
-function getServerInfo {
-    BA=$(grep $1 /tmp/awsinst.txt)
-    IFS=$'\2' read -ra ITEMS <<<"${BA//$'\t'/$'\2'}"
-    AWS_INSTANCE=${ITEMS[$key_instance]}
-    AWS_IP_PRIV=${ITEMS[$key_ippriv]}
-    AWS_IP_PUB=${ITEMS[$key_ippub]}
-    AWS_VPC=${ITEMS[$key_vpc]}
-    AWS_IMG=${ITEMS[$key_img]}
-    AWS_PEM=${ITEMS[$key_pem]}
-    AWS_NAME=${ITEMS[$key_name]}
-}
+if __name__ == "__main__":
+    if len(sys.argv) <= 1 or sys.argv[1] == '--help':
+        print_help()
+        exit()
 
-function getUsername {
-    if [ ! -f /tmp/awsimgs.txt ] || [$(grep ${AWS_IMG} /tmp/awsimgs.txt | wc -l) == 0 ]; then
-    	aws ec2 describe-images --image-ids $(aws ec2 describe-instances | grep '"ImageId":' | sort | uniq | sed 's/.*\(ami-.*\)\",/\1/' | xargs echo) --query 'Images[*].[ImageId,Name]' --output text >/tmp/awsimgs.txt
-    fi
-    local usrname="ec2-user"
-    is_ubuntu=$(grep $1 /tmp/awsimgs.txt | sed 's/.*\(ubuntu\).*/\1/')
-    if [ "${is_ubuntu}" == "ubuntu" ] ;then
-        usrname="ubuntu"
-    fi
-    echo "${usrname}"
-}
-function getBastion {
-    bastion=$(egrep "$1.*bastion" /tmp/awsinst.txt | awk '{print $'$(($key_ippub+1))'}')
-    echo ${bastion}
-}
-function getBastionUser {
-    bastionImg=$(egrep "$1.*bastion" /tmp/awsinst.txt | awk '{print $'$(($key_img+1))'}')
-    echo $(getUsername ${bastionImg})
-}
-
-function checkMultiple {
-    serverMatchList=()
-    if [ $(grep "${arg1}" /tmp/awsinst.txt | wc -l) -gt 1 ]; then
-        IFS=$'\r\n' GLOBIGNORE='*' command eval 'serverMatchList=($(grep "'${arg1}'" /tmp/awsinst.txt))'
-        selector=1
-        echo "Select instance:"
-        for i in `seq 1 ${#serverMatchList[@]}`
-        do
-            serverString=$(echo ${serverMatchList[$(($i-1))]}|awk '{print $1 " " $2}')
-            echo "(${selector}) ${serverString}"
-            selector=$((1+$selector))
-        done
-        read -p "Select instance: " resp
-        arg1=$(echo ${serverMatchList[$(($resp-1))]} | awk '{print $1}')
-    fi
-}
-
-# List all instance-names if --list is passed
-if [ ${arg1} == "--list" ];then
-	cat /tmp/awsinst.txt | awk '{print $'$(($key_name+1))'}'
-	exit
-fi
-
-# Check if we have multiple servers with the same name
-checkMultiple
-
-getServerInfo ${arg1}
-
-# get the default user for ubuntu/amazon linux
-sshuser=$(getUsername ${AWS_IMG})
-
-if [ ! ${AWS_IP_PUB} == "None" ];then
-    ssh ${sshuser}@${AWS_IP_PUB} -o StrictHostKeyChecking=no
-else
-    bastion=$(getBastion ${AWS_VPC})
-    bastionuser=$(getBastionUser ${AWS_VPC})
-	ssh -o ProxyCommand="ssh $bastionuser@$bastion nc %h %p" -o StrictHostKeyChecking=no ${sshuser}@${AWS_IP_PRIV}
-fi
+    server_name=sys.argv[1]
+    awsssh(server_name)
