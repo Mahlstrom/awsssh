@@ -12,10 +12,7 @@ def awsssh(server_name):
     # List all instance names
     if server_name == '--list':
         for name in sorted(instances.keys()):
-            if instances[name][0]['public_ip'] == None:
-                print name + '[p]'
-            else:
-                print name
+            print name
         exit()
 
     # If argument does not match help list or any instance name, exit
