@@ -12,12 +12,12 @@ def awsssh(server_name):
     # List all instance names
     if server_name == '--list':
         for name in sorted(instances.keys()):
-            print name
+            print(name)
         exit()
 
     # If argument does not match help list or any instance name, exit
     elif server_name not in instances:
-        print server_name + " is not a server"
+        print(server_name + " is not a server")
         exit()
 
     # ssh command with no strict host key checking
@@ -36,7 +36,7 @@ def awsssh(server_name):
         # get bastion from vpc id
         bastion = get_bastion(instance['vpc_id'])
         if not bastion:
-            print "can't find bastion"
+            print("can't find bastion")
             exit()
         # get bastion username based on amazon image type
         bastion_user = get_username(bastion['image_id'])

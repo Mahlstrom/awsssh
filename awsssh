@@ -4,7 +4,7 @@ from src.awsssh import awsssh
 
 
 def print_help():
-    print "Here is some help"
+    print("Here is some help")
 
 
 if __name__ == "__main__":
